@@ -179,9 +179,15 @@ class Signaling {
       await disconnect();
     }
 
+    // Если есть объект _ws но флаг _wsConnected=false — считаем его "stale" и закрываем
     if (_ws != null) {
-      _debugPrint('Already connected to correct room');
-      return;
+      if (_wsConnected && _wsRoom == roomId && !forceReconnect) {
+        _debugPrint('Already connected to correct room');
+        return;
+      }
+
+      _debugPrint('Stale or mismatched ws object detected, closing before reconnect');
+      await close();
     }
 
     try {
@@ -510,11 +516,24 @@ class Signaling {
   void _handleError(Object error) {
     _debugPrint('WebSocket error: $error');
     _wsConnected = false;
+
+    // Очистим объект сокета и подписку, чтобы connect() мог повторно создать соединение
+    try { _wsSub?.cancel(); } catch (_) {}
+    _wsSub = null;
+    try { _ws?.sink.close(); } catch (_) {}
+    _ws = null;
+
     onWsStateChanged?.call();
   }
 
   void _handleDone() {
+    _debugPrint('WebSocket done');
     _wsConnected = false;
+
+    try { _wsSub?.cancel(); } catch (_) {}
+    _wsSub = null;
+    _ws = null;
+
     onWsStateChanged?.call();
   }
 
